@@ -17,6 +17,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:mime/mime.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -183,6 +184,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
                       child: InAppWebView(
                         initialUrlRequest: URLRequest(url: Uri.parse(_url)),
                         //initialHeaders: {},
+
                         initialOptions: InAppWebViewGroupOptions(
                             crossPlatform: InAppWebViewOptions(
                               mediaPlaybackRequiresUserGesture: false,
@@ -190,35 +192,67 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
                               useOnDownloadStart: true,
                               useShouldOverrideUrlLoading: true,
                             ),
+                            android: AndroidInAppWebViewOptions(
+                              useShouldInterceptRequest: true, // <--
+                            ),
                             ios: IOSInAppWebViewOptions(
                               allowsInlineMediaPlayback: true,
                               limitsNavigationsToAppBoundDomains: true,
                             )),
-                        onLoadStart: (controller, url) {
+                        onLoadStart: (controller, url) async {
                           log("onLoadStart $url");
-                          print('on  load start');
+                          print("on  load start $url");
+                          if (url.toString().startsWith('https://api.whatsapp.com/send?phone')) {
+                            //print('blocking navigation to $request}');
+                            url.toString().replaceAll("https://api.whatsapp.com/send?phone=", "https://wa.me/");
+                            if (await canLaunch(url.toString())) {
+                              //await launch(url.toString());
+                            }
+                            //await _launchURL(
+                               // "https://wa.me/$phone/?text=${Uri.parse(message)}");
+                          }
+                        },
+                        shouldOverrideUrlLoading: (controller, shouldOverrideUrlLoadingRequest) async {
+                          var url = shouldOverrideUrlLoadingRequest.request.url.toString();
+                          print("url $url");
 
+                          if (url.contains('https://api.whatsapp.com/send?phone')) {
+                            if (await canLaunch(url)) {
+                              await launch(url);
+                            }
+                           return NavigationActionPolicy.CANCEL;
+                          } else {
+                            if (url.contains('whatsapp://send/?phone')) {
+                              return NavigationActionPolicy.CANCEL;
+                            }else {
+                              return NavigationActionPolicy.ALLOW;
+                            }
+                          }
                         },
                         onLoadStop: (controller, url) {
                           log("onLoadStop $url");
                         },
                         onLoadError: ( controller, url, code, message) {
                           print("onLoadError $message");
-
-                          //TODO: Show error alert message (Error in receive data from server)
                         },
                         onLoadHttpError: (controller, url, statusCode, description) {
                           print("onLoadHttpError $description");
-
-                          //TODO: Show error alert message (Error in receive data from server)
                         },
-            onConsoleMessage: (controller, consoleMessage) {
-              print("onConsoleMessage $consoleMessage");
-
-              //TODO: Show error alert message (Error in receive data from server)
-            },
-
-
+                        onConsoleMessage: (controller, consoleMessage) {
+                          print("onConsoleMessage $consoleMessage");
+                        },
+                        onAjaxReadyStateChange : (controller, ajaxRequest) {
+                          print("ajaxRequest $ajaxRequest.data");
+                          return ajaxRequest.data;
+                        },
+                        onReceivedServerTrustAuthRequest: (controller, challenge) async {
+                          //print("challenge $challenge");
+                          return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.PROCEED);
+                        },
+                        androidShouldInterceptRequest: // <--
+                            (controller, request) async {
+                          //print("request $request");
+                            },
 
                         onWebViewCreated: (InAppWebViewController controller) {
                           //print('token: ),
